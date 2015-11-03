@@ -15,24 +15,17 @@ namespace xxstory
 {
     public class StoryTweenFadeCtrl : StoryBaseCtrl
     {
-        private class paramInfo
+        private struct paramInfo
         {
-            public int dwType;//淡入淡出类型：0-淡入，1-淡出
-            public float time;
+            public int type;//淡入淡出类型：0-淡入，1-淡出
             public float amount;
             public int easetype;
             public Color directColor;
             public bool bReset;
         }
-        //事件相关属性
-        public int _dwType;
-        public float _time;
-        public float _amount;
-        public Color _directColor;
-        public bool _bReset;
-
         private paramInfo _saveInfo;
         private paramInfo _realInfo;
+        private paramInfo _normalInfo;
         private Hashtable _paramHash;
 
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
@@ -46,10 +39,8 @@ namespace xxstory
         }
         public override void initInfo()
         {
-            _saveInfo = new paramInfo();
-            _realInfo = new paramInfo();
             _paramHash = new Hashtable();
-            _amount = 1f;
+            _normalInfo.amount = 1f;
             base.initInfo();
             expList.Add("directColor");
             expList.Add("time");
@@ -62,13 +53,8 @@ namespace xxstory
             StoryTweenFadeCtrl obj = new StoryTweenFadeCtrl();
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj._baseCtrl = _baseCtrl;
-            //////本类事件属性赋值
-            obj._time = _time;
-            obj._directColor = _directColor;
-            obj._dwType = _dwType;
-            obj._amount = _amount;
-            obj._bReset = _bReset;
+            obj.time = time;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
         public override void Execute()
@@ -77,51 +63,58 @@ namespace xxstory
             iTween.CameraFadeAdd(_t2d);
             SmoothTarget(_realInfo);
         }
- 
-        /// ////////////////功能重写部分-需要保存状态时可以重写/////////////////////////////////////////////
-        //修改事件内容可以重写-点击页签AddEvent-修改时调用
+        public override void OnFinish()
+        {
+            if (_saveInfo.bReset == true)
+                iTween.CameraFadeDestroy();
+        }
         public override void ModInfo()
         {
             SavePoint();
             _realInfo = _saveInfo;
         }
-        //保存存储点时可以重写-点击页签AddEvent-存储点时调用
         public override void SavePoint()
         {
-            _saveInfo.dwType = _dwType;
-            _saveInfo.directColor = _directColor;
-            _saveInfo.time = _time;
-            _saveInfo.amount = _amount;
-            _saveInfo.bReset = _bReset;
+            _saveInfo = _normalInfo;
         }
-        //重设存储点时可以重写-点击页签AddEvent-重设时调用
-        public override void ResetPoint()
+        public override void ResetPoint(bool bRealInfo)
         {
-            _dwType = _saveInfo.dwType;
-            _directColor = _saveInfo.directColor;
-            _time = _saveInfo.time;
-            _amount = _saveInfo.amount;
-            _bReset = _saveInfo.bReset;
-        }
-        public override void OnFinish()
-        {
-            if (_saveInfo.bReset==true)
-                iTween.CameraFadeDestroy();
-            base.OnFinish();
+            if (bRealInfo)
+                _normalInfo = _realInfo;
+            else
+                _normalInfo = _saveInfo;
         }
         /// //////////////////属性导出导入部分-有导入导出需求时重写///////////////////////////////////////////////
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "dwType":
+                    _normalInfo.type = lua.L_CheckInteger(-1);
+                    break;
+                case "directColor":
+                    _normalInfo.directColor = LuaExport.GetColor(lua, -1);
+                    break;
+                case "amount":
+                    _normalInfo.amount = (float)lua.L_CheckNumber(-1);
+                    break;
+                case "bReset":
+                    _normalInfo.bReset = lua.ToBoolean(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
+        }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
             switch (key)
             {
                 case "dwType":
-                    lua.PushInteger(_realInfo.dwType);
+                    lua.PushInteger(_realInfo.type);
                     break;
                 case "directColor":
                     LuaExport.ColorToStack(lua, _realInfo.directColor);
-                    break;
-                case "time":
-                    lua.PushNumber(_realInfo.time);
                     break;
                 case "amount":
                     lua.PushNumber(_realInfo.amount);
@@ -141,12 +134,11 @@ namespace xxstory
         {
             EditorGUILayout.BeginHorizontal();
             GUILayout.Label("类型 0:当前->指定,1:指定->当前");
-            _dwType = EditorGUILayout.IntField(_dwType);
+            _normalInfo.type = EditorGUILayout.IntField(_normalInfo.type);
             EditorGUILayout.EndHorizontal();
-            _directColor = EditorGUILayout.ColorField("directColor", _directColor);
-            _time = EditorGUILayout.FloatField("time", _time);
-            _amount = EditorGUILayout.FloatField("amount", _amount);
-            _bReset = GUILayout.Toggle(_bReset, "结束销毁");
+            _normalInfo.directColor = EditorGUILayout.ColorField("directColor", _normalInfo.directColor);
+            _normalInfo.amount = EditorGUILayout.FloatField("amount", _normalInfo.amount);
+            _normalInfo.bReset = GUILayout.Toggle(_normalInfo.bReset, "bReset");
             base.OnParamGUI();
         }
 #endif
@@ -154,21 +146,21 @@ namespace xxstory
         private void SmoothTarget(paramInfo pmInfo)
         {
             _paramHash.Clear();
-            _paramHash.Add("time", pmInfo.time);
+            _paramHash.Add("time", time);
             _paramHash.Add("amount", pmInfo.amount);
             _paramHash.Add("easetype", iTween.EaseType.linear);
-            _paramHash.Add("oncomplete", "OnProxyFinish");
-            _paramHash.Add("oncompleteparams", this);
-            _paramHash.Add("oncompletetarget", _baseCtrl.objProxy.gameObject);
-            if (pmInfo.dwType == 0)
+//             _paramHash.Add("oncomplete", "OnProxyFinish");
+//             _paramHash.Add("oncompleteparams", this);
+//             _paramHash.Add("oncompletetarget", _baseCtrl.objProxy.gameObject);
+            if (pmInfo.type == 0)
                 iTween.CameraFadeTo(_paramHash);
-            else if(pmInfo.dwType == 1)
+            else if(pmInfo.type == 1)
             {
                 iTween.CameraFadeFrom(_paramHash);
             }
             else
             {
-                Debug.Log("StoryTweenFadeCtrl not have dwType:" + pmInfo.dwType);
+                Debug.Log("StoryTweenFadeCtrl not have dwType:" + pmInfo.type);
             }
         }
     }

@@ -15,15 +15,18 @@ namespace xxstory
 {
     public class StoryPictureCtrl : StoryBaseCtrl
     {
-        //事件相关属性
-        public string _atlas="";
-        public string _img="";
-        public string _texture = "";
-        public float _time;
-        public Vector2 _size;
-        public Vector3 _position;
-        public float dwStart;
-        
+        private struct paramInfo
+        {
+            public string atlas;
+            public string sprite;
+            public string texture;
+            public int depth;
+            public Vector3 size;
+            public Vector3 localPosition;
+        }
+        private paramInfo _saveInfo;
+        private paramInfo _realInfo;
+        private paramInfo _normalInfo;
         
         private UITexture mTexture;
         private UISprite mSprite;
@@ -38,13 +41,16 @@ namespace xxstory
         }
         public override void initInfo()
         {
-            _size = new Vector2(100, 100);
-            bWait = false;
+            _normalInfo.size = new Vector2(100, 100);
+            _normalInfo.depth = 5;
+            _normalInfo.atlas = "";
+            _normalInfo.sprite = "";
+            _normalInfo.texture = "";
             base.initInfo();
             expList.Add("atlas");
-            expList.Add("img");
+            expList.Add("sprite");
             expList.Add("texture");
-            expList.Add("time");
+            expList.Add("depth");
             expList.Add("size");
             expList.Add("localPosition");
         }
@@ -53,53 +59,83 @@ namespace xxstory
             StoryPictureCtrl obj = new StoryPictureCtrl();
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj._baseCtrl = _baseCtrl;
-            //////本类事件属性赋值
-            obj._atlas = _atlas;
-            obj._img = _img;
-            obj._texture = _texture;
-            obj._time = _time;
-            obj._size = _size;
-            obj._position = _position;
+            obj.time = time;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
         public override void Execute()
         {
-            dwStart = Time.time;
             ShowPicture();
         }
-        public override void Update()
+        public override void OnFinish()
         {
-            if (dwStart == 0) return;
-            if (Time.time - dwStart > _time)
-            {
-                HidePicture();
-                dwStart = 0f;
-                OnFinish();
-            }
+            HidePicture();
+        }
+        public override void ModInfo()
+        {
+            SavePoint();
+            _realInfo = _saveInfo;
+        }
+        public override void SavePoint()
+        {
+            _saveInfo = _normalInfo;
+        }
+        public override void ResetPoint(bool bRealInfo)
+        {
+            if (bRealInfo == true)
+                _normalInfo = _realInfo;
+            else
+                _normalInfo = _saveInfo;
         }
         /// //////////////////属性导出导入部分-有导入导出需求时重写///////////////////////////////////////////////
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "atlas":
+                    _normalInfo.atlas = lua.L_CheckString(-1);
+                    break;
+                case "sprite":
+                    _normalInfo.sprite = lua.L_CheckString(-1);
+                    break;
+                case "texture":
+                    _normalInfo.texture = lua.L_CheckString(-1);
+                    break;
+                case "localPosition":
+                    _normalInfo.localPosition = LuaExport.GetVector3(lua, -1);
+                    break;
+                case "size":
+                    _normalInfo.size = LuaExport.GetVector2(lua, -1);
+                    break;
+                case "depth":
+                    _normalInfo.depth = lua.L_CheckInteger(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
+        }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
             switch (key)
             {
                 case "atlas":
-                    lua.PushString(_atlas);
+                    lua.PushString(_realInfo.atlas);
                     break;
-                case "img":
-                    lua.PushString(_img);
+                case "sprite":
+                    lua.PushString(_realInfo.sprite);
                     break;
                 case "texture":
-                    lua.PushString(_texture);
-                    break;
-                case "time":
-                    lua.PushNumber(_time);
+                    lua.PushString(_realInfo.texture);
                     break;
                 case "localPosition":
-                    LuaExport.Vector3ToStack(lua, _position);
+                    LuaExport.Vector3ToStack(lua, _realInfo.localPosition);
                     break;
                 case "size":
-                    LuaExport.Vector2ToStack(lua, _size);
+                    LuaExport.Vector2ToStack(lua, _realInfo.size);
+                    break;
+                case "depth":
+                    lua.PushInteger(_realInfo.depth);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -110,45 +146,44 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            _atlas = EditorGUILayout.TextField("atlas", _atlas);
-            _img = EditorGUILayout.TextField("img", _img);
-            _texture = EditorGUILayout.TextField("texture", _texture);
-            _time = EditorGUILayout.FloatField("time", _time);
-            _size = EditorGUILayout.Vector2Field("size", _size);
-            _position = EditorGUILayout.Vector3Field("localPosition", _position);
+            _normalInfo.atlas = EditorGUILayout.TextField("Atlas", _normalInfo.atlas);
+            _normalInfo.sprite = EditorGUILayout.TextField("Sprite", _normalInfo.sprite);
+            _normalInfo.texture = EditorGUILayout.TextField("Texture", _normalInfo.texture);
+            _normalInfo.depth = EditorGUILayout.IntField("depth", _normalInfo.depth);
+            _normalInfo.size = EditorGUILayout.Vector2Field("size", _normalInfo.size);
+            _normalInfo.localPosition = EditorGUILayout.Vector3Field("localPosition", _normalInfo.localPosition);
             base.OnParamGUI();
         }
 #endif
         /// /////////////////////////////// 功能函数 ///////////////////////////////////////////////////////////////
         public void ShowPicture()
         {
-            Debug.Log("StoryPictureCtrl:ShowPicture:"+_texture+":"+ _atlas+":"+ _img);
-            if(_texture != "")
+            Debug.Log("ShowPicture:" + _realInfo.texture + ":" + _realInfo.atlas + ":" + _realInfo.sprite);
+            if(_realInfo.texture != "")
             {
                 if (mTexture == null)
                 {
                     mTexture = NGUITools.AddChild<UITexture>( objStoryUI.backGround);
-                    //mTexture.localSize = _size;
                 }
-                mTexture.transform.localPosition = _position;
-                NGUITools.AdjustDepth(mTexture.gameObject, 2);
-                mTexture.width = (int)_size.x;
-                mTexture.height = (int)_size.y;
-                //mTexture.mainTexture = HUIManager.LoadTexture(_texture);
+                mTexture.transform.localPosition = _realInfo.localPosition;
+                NGUITools.AdjustDepth(mTexture.gameObject, _realInfo.depth);
+                mTexture.width = (int)_realInfo.size.x;
+                mTexture.height = (int)_realInfo.size.y;
+                mTexture.mainTexture = HUIManager.LoadTexture(_realInfo.texture);
             }
             else
             {
                 if (mSprite == null)
                 {
-                    mSprite = NGUITools.AddChild<UISprite>( objStoryUI.backGround);
+                    mSprite = NGUITools.AddChild<UISprite>(objStoryUI.backGround);
                     mSprite.gameObject.name = "storyPicture";
                 }
-                mSprite.transform.localPosition = _position;
-                NGUITools.AdjustDepth(mSprite.gameObject, 2);
-                mSprite.width = (int)_size.x;
-                mSprite.height = (int)_size.y;
-                //mSprite.atlas = HUIManager.LoadAtlas(_atlas);
-                mSprite.spriteName = _img;
+                mSprite.transform.localPosition = _realInfo.localPosition;
+                NGUITools.AdjustDepth(mSprite.gameObject, _realInfo.depth);
+                mSprite.width = (int)_realInfo.size.x;
+                mSprite.height = (int)_realInfo.size.y;
+                mSprite.atlas = HUIManager.LoadAtlas(_realInfo.atlas);
+                mSprite.spriteName = _realInfo.sprite;
             }
         }
         public void HidePicture()
@@ -156,7 +191,7 @@ namespace xxstory
             if (mSprite != null)
                 GameObject.DestroyObject(mSprite.gameObject);
             else if (mTexture != null)
-                GameObject.DestroyObject(mTexture.gameObject);
+                GameObject.DestroyImmediate(mTexture.gameObject);
             return;
         }
     }

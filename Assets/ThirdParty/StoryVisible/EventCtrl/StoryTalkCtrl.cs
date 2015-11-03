@@ -15,11 +15,15 @@ namespace xxstory
 {
     public class StoryTalkCtrl : StoryBaseCtrl
     {
-        //事件相关属性
-        public string _talkName;
-        public string _talkInfo;
-        public float _time;
-        public float dwStart;
+        private struct paramInfo
+        {
+            public string talkName;
+            public string talkInfo;
+            public bool bHideNext;
+        }
+        private paramInfo _realInfo;
+        private paramInfo _saveInfo;
+        private paramInfo _normalInfo;
 
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
         public override string luaName
@@ -32,52 +36,81 @@ namespace xxstory
         }
         public override void initInfo()
         {
-            bWait = false;
+            _normalInfo.talkName = "";
+            _normalInfo.talkInfo = "";
             base.initInfo();
             expList.Add("talkName");
             expList.Add("talkInfo");
-            expList.Add("time");
+            expList.Add("bHideNext");
         }
         public override StoryBaseCtrl CopySelf()
         {
             StoryTalkCtrl obj = new StoryTalkCtrl();
+            obj.time = time;
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj._baseCtrl = _baseCtrl;
             //////本类事件属性赋值
-            obj._talkName = _talkName;
-            obj._talkInfo = _talkInfo;
-            obj._time = _time;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
         public override void Execute()
         {
-            dwStart = Time.time;
+            if (_realInfo.bHideNext == false)
+                LuaAnimEvent.OnBtnNextState(true);
             ShowTalkInfo();
         }
-        public override void Update()
+        public override void OnFinish()
         {
-            if (dwStart == 0) return;
-            if (Time.time - dwStart > _time)
-            {
-                HideTalkInfo();
-                dwStart = 0f;
-                OnFinish();
-            }
+            LuaAnimEvent.OnBtnNextState(false);
+            HideTalkInfo();
+        }
+        public override void ModInfo()
+        {
+            SavePoint();
+            _realInfo = _saveInfo;
+        }
+        public override void SavePoint()
+        {
+            _saveInfo = _normalInfo;
+        }
+        public override void ResetPoint(bool bRealInfo)
+        {
+            if (bRealInfo == true)
+                _normalInfo = _realInfo;
+            else
+                _normalInfo = _saveInfo;
         }
         /// //////////////////属性导出导入部分-有导入导出需求时重写///////////////////////////////////////////////
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "talkInfo":
+                    _normalInfo.talkInfo = lua.L_CheckString(-1);
+                    break;
+                case "talkName":
+                    _normalInfo.talkName = lua.L_CheckString(-1);
+                    break;
+                case "bHideNext":
+                    _normalInfo.bHideNext = lua.ToBoolean(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
+        }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
             switch (key)
             {
                 case "talkInfo":
-                    lua.PushString(_talkInfo);
+                    lua.PushString(_realInfo.talkInfo);
                     break;
                 case "talkName":
-                    lua.PushString(_talkName);
+                    lua.PushString(_realInfo.talkName);
                     break;
-                case "time":
-                    lua.PushNumber(_time);
+                case "bHideNext":
+                    lua.PushBoolean(_realInfo.bHideNext);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -88,17 +121,17 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            _talkName = EditorGUILayout.TextField("talkName-人名", _talkName);
-            _talkInfo = EditorGUILayout.TextField("talkInfo-内容", _talkInfo);
-            _time = EditorGUILayout.FloatField("time-显示时间", _time);
+            _normalInfo.talkName = EditorGUILayout.TextField("talkName-名字", _normalInfo.talkName);
+            _normalInfo.talkInfo = EditorGUILayout.TextField("talkInfo-内容", _normalInfo.talkInfo);
+            _normalInfo.bHideNext = GUILayout.Toggle(_normalInfo.bHideNext, "bHideNext");
             base.OnParamGUI();
         }
 #endif
         /// /////////////////////////////// 功能函数 ///////////////////////////////////////////////////////////////
         public void ShowTalkInfo()
         {
-            objStoryUI.talkName.text = _talkName;
-            objStoryUI.talkInfo.text = _talkInfo;
+            objStoryUI.talkName.text = _normalInfo.talkName;
+            objStoryUI.talkInfo.text = _normalInfo.talkInfo;
         }
         public void HideTalkInfo()
         {

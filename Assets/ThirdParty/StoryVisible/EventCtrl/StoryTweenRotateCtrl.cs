@@ -15,22 +15,16 @@ namespace xxstory
 {
     public class StoryTweenRotateCtrl : StoryBaseCtrl
     {
-        private class paramInfo
+        private struct paramInfo
         {
-            public float time;
-            public int easetype;
+            public iTween.EaseType easetype;
             public Vector3 localEulerAngles;
-            public Vector3 directRotate;
-            public bool bInitRatate;
+            public Vector3 directEulerAngles;
+            public bool bInitEulerAngles;
         }
-        //事件相关属性
-        public Transform target;
-        public float _time;
-        public Vector3 _localEulerAngles;
-        public bool _bInitRatate;
-
         private paramInfo _saveInfo;
         private paramInfo _realInfo;
+        private paramInfo _normalInfo;
         private Hashtable _paramHash;
 
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
@@ -44,15 +38,13 @@ namespace xxstory
         }
         public override void initInfo()
         {
-            _saveInfo = new paramInfo();
-            _realInfo = new paramInfo();
+            _normalInfo.easetype = iTween.EaseType.linear;
             _paramHash = new Hashtable();
             base.initInfo();
-            expList.Add("szTarget");
             expList.Add("directRotate");
             expList.Add("localEulerAngles");
-            expList.Add("time");
             expList.Add("bInitRatate");
+            expList.Add("easetype");
             
         }
         public override StoryBaseCtrl CopySelf()
@@ -60,67 +52,74 @@ namespace xxstory
             StoryTweenRotateCtrl obj = new StoryTweenRotateCtrl();
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj._baseCtrl = _baseCtrl;
-            //////本类事件属性赋值
-            obj.target= target;
-            obj._time = _time;
-            obj._localEulerAngles = _localEulerAngles;
-            obj._bInitRatate = _bInitRatate;
+            obj.time = time;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
         public override void Execute()
         {
-            if (_realInfo.bInitRatate == true)
+            Transform target = _shotCtrl.actor.target.transform;
+            if (_realInfo.bInitEulerAngles == true)
             {
                 target.localEulerAngles = _realInfo.localEulerAngles;
             }
             SmoothTarget(target, _realInfo);
         }
- 
-        /// ////////////////功能重写部分-需要保存状态时可以重写/////////////////////////////////////////////
-        //修改事件内容可以重写-点击页签AddEvent-修改时调用
         public override void ModInfo()
         {
             SavePoint();
             _realInfo = _saveInfo;
         }
-        //保存存储点时可以重写-点击页签AddEvent-存储点时调用
         public override void SavePoint()
         {
-            _saveInfo.localEulerAngles = _localEulerAngles;
-            _saveInfo.directRotate = target.localEulerAngles;
-            _saveInfo.time = _time;
-            _saveInfo.bInitRatate = _bInitRatate;
+            _saveInfo = _normalInfo;
         }
-        //重设存储点时可以重写-点击页签AddEvent-重设时调用
-        public override void ResetPoint()
+        public override void ResetPoint(bool bRealInfo)
         {
-            _localEulerAngles = _saveInfo.localEulerAngles;
-            target.localEulerAngles = _saveInfo.directRotate;
-            _time = _saveInfo.time;
-            _bInitRatate = _saveInfo.bInitRatate;
+            if (bRealInfo)
+                _normalInfo = _realInfo;
+            else
+                _normalInfo = _saveInfo;
         }
         /// //////////////////属性导出导入部分-有导入导出需求时重写///////////////////////////////////////////////
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "directRotate":
+                    _normalInfo.directEulerAngles = LuaExport.GetVector3(lua, -1);
+                    break;
+                case "localEulerAngles":
+                    _normalInfo.localEulerAngles = LuaExport.GetVector3(lua, -1);
+                    break;
+                case "bInitRatate":
+                    _normalInfo.bInitEulerAngles = lua.ToBoolean(-1);
+                    break;
+                case "easetype":
+                    _normalInfo.easetype = (iTween.EaseType)lua.L_CheckInteger(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
+        }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
             switch (key)
             {
-                case "szTarget":
-                    lua.PushString(target.name);
-                    break;
                 case "directRotate":
-                    LuaExport.Vector3ToStack(lua, _realInfo.directRotate);
+                    LuaExport.Vector3ToStack(lua, _realInfo.directEulerAngles);
                     break;
                 case "localEulerAngles":
-                    if (_realInfo.bInitRatate == false)
+                    if (_realInfo.bInitEulerAngles == false)
                         return false;
                     LuaExport.Vector3ToStack(lua, _realInfo.localEulerAngles);
                     break;
-                case "time":
-                    lua.PushNumber(_realInfo.time);
-                    break;
                 case "bInitRatate":
-                    lua.PushBoolean(_realInfo.bInitRatate);
+                    lua.PushBoolean(_realInfo.bInitEulerAngles);
+                    break;
+                case "easetype":
+                    lua.PushInteger((int)_realInfo.easetype);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -131,23 +130,30 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            target = EditorGUILayout.ObjectField(target, typeof(Transform)) as Transform;
-            if (target != null)
-            {
-
-                target.localEulerAngles = EditorGUILayout.Vector3Field("directRotate", target.localEulerAngles);
-                
-            }
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("c", new GUILayoutOption[]{GUILayout.Height(20), GUILayout.Width(20)}))
             {
-                _localEulerAngles = target.transform.localEulerAngles;
+                _normalInfo.localEulerAngles = Selection.activeTransform.eulerAngles;
             }
-
-            _localEulerAngles = EditorGUILayout.Vector3Field("localRotate", _localEulerAngles);
+            if (GUILayout.Button("s", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
+            {
+                _shotCtrl.actor.target.transform.localEulerAngles = _normalInfo.directEulerAngles;
+            }
+            _normalInfo.localEulerAngles = EditorGUILayout.Vector3Field("localRotate", _normalInfo.localEulerAngles);
             GUILayout.EndHorizontal();
-            _time = EditorGUILayout.FloatField("time", _time);
-            _bInitRatate = GUILayout.Toggle(_bInitRatate, "bInitRatate");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("c", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
+            {
+                _normalInfo.directEulerAngles = Selection.activeTransform.eulerAngles;
+            }
+            if (GUILayout.Button("s", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
+            {
+                _shotCtrl.actor.target.transform.localEulerAngles = _normalInfo.localEulerAngles;
+            }
+            _normalInfo.directEulerAngles = EditorGUILayout.Vector3Field("directRotate", _normalInfo.directEulerAngles);
+            GUILayout.EndHorizontal();
+            _normalInfo.easetype = (iTween.EaseType)EditorGUILayout.EnumPopup("easetype", _normalInfo.easetype);
+            _normalInfo.bInitEulerAngles = GUILayout.Toggle(_normalInfo.bInitEulerAngles, "bInitRatate");
             base.OnParamGUI();
         }
 #endif
@@ -155,12 +161,12 @@ namespace xxstory
         private void SmoothTarget(Transform sTarget, paramInfo pmInfo)
         {
             _paramHash.Clear();
-            _paramHash.Add("time", pmInfo.time);
-            _paramHash.Add("rotation", pmInfo.directRotate);
-            _paramHash.Add("easetype", iTween.EaseType.linear);
-            _paramHash.Add("oncomplete", "OnProxyFinish");
-            _paramHash.Add("oncompleteparams", this);
-            _paramHash.Add("oncompletetarget", _baseCtrl.objProxy.gameObject);
+            _paramHash.Add("time", time);
+            _paramHash.Add("rotation", pmInfo.directEulerAngles);
+            _paramHash.Add("easetype", pmInfo.easetype);
+//             _paramHash.Add("oncomplete", "OnProxyFinish");
+//             _paramHash.Add("oncompleteparams", this);
+//             _paramHash.Add("oncompletetarget", _baseCtrl.objProxy.gameObject);
             
             iTween.RotateTo(sTarget.gameObject, _paramHash);
         }

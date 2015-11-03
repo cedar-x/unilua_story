@@ -7,43 +7,40 @@ using UniLua;
 using Hstj;
 
 /// <summary>
-/// 设计目的：用于--蒙太奇效果类--事件的调度
-/// 设计时间：2015-08-03
+/// 设计目的：用于--Camera震动--事件的调度
+/// 设计时间：2015-10-16
 /// </summary>
 
 namespace xxstory
 {
-    public class StoryMontageCtrl : StoryBaseCtrl
+    public class StoryCameraShakeCtrl : StoryBaseCtrl
     {
         private struct paramInfo
         {
-            public string spName;
-            public float distance;
+            public int type;
+            public float intensity;
         }
         private paramInfo _saveInfo;
         private paramInfo _realInfo;
         private paramInfo _normalInfo;
-        //事件相关属性
-        private LuaMeshImage _meshImage;
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
         public override string luaName
         {
-            get { return "StoryMontageCtrl"; }
+            get { return "StoryCameraShakeCtrl"; }
         }
         public override string ctrlName
         {
-            get { return "蒙太奇"; }
+            get { return "震屏"; }
         }
         public override void initInfo()
         {
-            _normalInfo.distance = 10f;
             base.initInfo();
-            expList.Add("spName");
-            expList.Add("distance");
+            expList.Add("type");
+            expList.Add("intensity");
         }
         public override StoryBaseCtrl CopySelf()
         {
-            StoryMontageCtrl obj = new StoryMontageCtrl();
+            StoryCameraShakeCtrl obj = new StoryCameraShakeCtrl();
             obj.bWait = bWait;
             obj.bClick = bClick;
             obj.time = time;
@@ -52,13 +49,10 @@ namespace xxstory
         }
         public override void Execute()
         {
-            _meshImage = objMainCamera.gameObject.GetComponentInChildren<LuaMeshImage>();
-            _meshImage.transform.localPosition = new Vector3(0f, 0f, _realInfo.distance);
-            _meshImage.init(_realInfo.spName, objMainCamera.fieldOfView);
-        }
-        public override void OnFinish()
-        {
-            _meshImage.Clear();
+            if (time == 0f)
+                objMainCamera.DoShake(_realInfo.type, 0, 0);
+            else
+                objMainCamera.DoShake(_realInfo.intensity, time);
         }
         public override void ModInfo()
         {
@@ -80,11 +74,11 @@ namespace xxstory
         {
             switch (key)
             {
-                case "spName":
-                    _normalInfo.spName = lua.L_CheckString(-1);
+                case "type":
+                    _normalInfo.type = lua.L_CheckInteger(-1);
                     break;
-                case "distance":
-                    _normalInfo.distance = (float)lua.L_CheckNumber(-1);
+                case "intensity":
+                    _normalInfo.intensity = (float)lua.L_CheckNumber(-1);
                     break;
                 default:
                     return base.WidgetWriteOper(lua, key);
@@ -95,11 +89,11 @@ namespace xxstory
         {
             switch (key)
             {
-                case "spName":
-                    lua.PushString(_realInfo.spName);
+                case "type":
+                    lua.PushInteger(_realInfo.type);
                     break;
-                case "distance":
-                    lua.PushNumber(_realInfo.distance);
+                case "intensity":
+                    lua.PushNumber(_realInfo.intensity);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -107,13 +101,15 @@ namespace xxstory
             return true;
         }
 #if UNITY_EDITOR 
+        /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            _normalInfo.spName = EditorGUILayout.TextField("spName", _normalInfo.spName);
-            _normalInfo.distance = EditorGUILayout.FloatField("distance", _normalInfo.distance);
+            _normalInfo.type = EditorGUILayout.IntField("type", _normalInfo.type);
+            _normalInfo.intensity = EditorGUILayout.FloatField("intensity", _normalInfo.intensity);
             base.OnParamGUI();
         }
 #endif
+        /// /////////////////////////////// 功能函数 ///////////////////////////////////////////////////////////////
 
     }
 }

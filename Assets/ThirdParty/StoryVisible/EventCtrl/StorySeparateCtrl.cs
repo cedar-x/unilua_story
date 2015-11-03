@@ -28,13 +28,14 @@ namespace xxstory
         public override void initInfo()
         {
             base.initInfo();
+            expList.Add("bClear");
         }
         public override StoryBaseCtrl CopySelf()
         {
             StorySeparateCtrl obj = new StorySeparateCtrl();
             obj.bClick = bClick;
             obj.bWait = bWait;
-            obj._baseCtrl = _baseCtrl;
+            obj.time = time;
             obj._bClear = _bClear;
             return obj;
         }
@@ -44,15 +45,38 @@ namespace xxstory
                 objMainCamera.target = null;
             objMainCamera.SeparateParent();
         }
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "bClear":
+                    _bClear = lua.ToBoolean(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
+        }
+        protected override bool WidgetReadOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "bClear":
+                    lua.PushBoolean(_bClear);
+                    break;
+                default:
+                    return base.WidgetReadOper(lua, key);
+            }
+            return true;
+        }
 #if UNITY_EDITOR 
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            _bClear = GUILayout.Toggle(_bClear, "清除目标");
-            GUILayout.Label("点击添加Camera分离事件");
+            _bClear = GUILayout.Toggle(_bClear, "clear target");
+            base.OnParamGUI();
         }
 #endif
-        /// /////////////////////////////// 功能函数 ///////////////////////////////////////////////////////////////
 
     }
 }

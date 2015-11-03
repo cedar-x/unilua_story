@@ -15,13 +15,14 @@ namespace xxstory
 {
     public class StoryCameraLookCtrl : StoryBaseCtrl
     {
-        public Transform target;
-        public normalInfo _cameraParam;
-        public int _dwType;
-
-        public normalInfo _saveInfo;
-        public normalInfo _realInfo;
-        public normalInfo _viewInfo;
+        private struct paramInfo
+        {
+            public normalInfo cameraParam;
+            public int type;
+        }
+        private paramInfo _realInfo;
+        private paramInfo _saveInfo;
+        private paramInfo _normalInfo;
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
         public override string luaName
         {
@@ -33,35 +34,32 @@ namespace xxstory
         }
         public override void initInfo()
         {
-            _cameraParam = new normalInfo();
-            _dwType = 1;
+            _normalInfo.type = 1;
             base.initInfo();
-            expList.Add("szTarget");
             expList.Add("cameraParam");
-            expList.Add("dwType");
+            expList.Add("type");
         }
         public override StoryBaseCtrl CopySelf()
         {
             StoryCameraLookCtrl obj = new StoryCameraLookCtrl();
             obj.bWait = bWait;
-            obj._baseCtrl = _baseCtrl;
             obj.bClick = bClick;
-            obj.target = target;
-            obj._cameraParam = _cameraParam;
-            obj._dwType = _dwType;
+            obj.time = time;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
         public override void Execute()
         {
+            Transform target = _shotCtrl.actor.target.transform;
             if (target == null)
             {
                 Debug.LogWarning("StroyCamerLookCtrl have not target set.......please check.");
                 return;
             }
-            if (_realInfo.distance > 0f)
+            if (_realInfo.cameraParam.distance > 0f)
             {
                 objMainCamera.StopTween();
-                objMainCamera.UseParam(_realInfo);
+                objMainCamera.UseParam(_realInfo.cameraParam);
                 objMainCamera.LookTarget(target);
             }
             else
@@ -72,28 +70,31 @@ namespace xxstory
         //修改事件内容可以重写-点击页签AddEvent-修改时调用
         public override void ModInfo()
         {
-            _realInfo = _cameraParam;
-
-            _saveInfo = _realInfo;
+            SavePoint();
+            _realInfo = _saveInfo;
         }
         //保存存储点时可以重写-点击页签AddEvent-存储点时调用
         public override void SavePoint()
         {
-            _saveInfo = _cameraParam;
+            _saveInfo = _normalInfo;
         }
         //重设存储点时可以重写-点击页签AddEvent-重设时调用
-        public override void ResetPoint()
+        public override void ResetPoint(bool bRealInfo)
         {
-            _cameraParam = _saveInfo;
+            if (bRealInfo == false)
+                _normalInfo = _saveInfo;
+            else
+                _normalInfo = _realInfo;
         }
         protected override bool WidgetWriteOper(ILuaState lua, string key)
         {
             switch (key)
             {
-                case "szTarget":
-                    break;
                 case "cameraParam":
-                    _cameraParam = LuaExport.GetNormalInfo(lua, -1);
+                    _normalInfo.cameraParam = LuaExport.GetNormalInfo(lua, -1);
+                    break;
+                case "type":
+                    _normalInfo.type = lua.L_CheckInteger(-1);
                     break;
                 default:
                     return base.WidgetWriteOper(lua, key);
@@ -104,18 +105,11 @@ namespace xxstory
         {
             switch (key)
             {
-                case "szTarget":
-                    if (target == null)
-                        return false;
-                    lua.PushString(target.name);
-                    break;
                 case "cameraParam":
-                    if (target == null || _cameraParam.distance == 0f)
-                        return false;
-                    LuaExport.NormalInfoToStack(lua, _cameraParam);
+                    LuaExport.NormalInfoToStack(lua, _normalInfo.cameraParam);
                     break;
-                case "dwType":
-                    lua.PushInteger(_dwType);
+                case "type":
+                    lua.PushInteger(_normalInfo.type);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -126,13 +120,12 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            target = EditorGUILayout.ObjectField(target, typeof(Transform)) as Transform;
-            StoryBaseCtrl.OnCameraInfoGUI(ref _cameraParam);
-            if (GUILayout.Button("Flush"))
+            StoryBaseCtrl.OnCameraInfoGUI(ref _normalInfo.cameraParam);
+            if (_shotCtrl != null && GUILayout.Button("Flush"))
             {
-                objMainCamera.type = (CameraCastType)_dwType;
-                objMainCamera.UseParam(_cameraParam);
-                objMainCamera.LookTarget(target, false);  
+                objMainCamera.type = (CameraCastType)_normalInfo.type;
+                objMainCamera.UseParam(_normalInfo.cameraParam);
+                objMainCamera.LookTarget(_shotCtrl.actor.target.transform, false);  
             }
             base.OnParamGUI();
         }

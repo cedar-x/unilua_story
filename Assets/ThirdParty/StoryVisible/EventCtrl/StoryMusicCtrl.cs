@@ -1,6 +1,5 @@
 ﻿using UnityEngine;
 using System.Collections;
-using System.Collections.Generic;
 #if UNITY_EDITOR 
 using UnityEditor;
 #endif
@@ -8,46 +7,45 @@ using UniLua;
 using Hstj;
 
 /// <summary>
-/// 设计目的：用于--UI文字描述--事件的调度
-/// 设计时间：2015-10-10
+/// 设计目的：用于--音效类--事件的调度
+/// 设计时间：2015-10-21
 /// </summary>
 
 namespace xxstory
 {
-    public class StoryUIDescCtrl : StoryBaseCtrl
+    public class StoryMusicCtrl : StoryBaseCtrl
     {
         private struct paramInfo
         {
-            public string descName;
-            public string childName;
-            public Vector3 localPosition;
+            public string musicName;
+            public bool bLoop;
+            public float volume;
         }
+        //事件相关属性
         private paramInfo _saveInfo;
         private paramInfo _realInfo;
         private paramInfo _normalInfo;
-        private HUIShowPicture mPicture;
-        public List<Texture2D> _textures = new List<Texture2D>();
-
+        private AudioObject _objMusic;
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
         public override string luaName
         {
-            get { return "StoryUIDescCtrl"; }
+            get { return "StoryMusicCtrl"; }
         }
         public override string ctrlName
         {
-            get { return "描述"; }
+            get { return "音效"; }
         }
         public override void initInfo()
         {
-            _normalInfo.childName = "grid";
+            _normalInfo.volume = 1f;
             base.initInfo();
-            expList.Add("descName");
-            expList.Add("childName");
-            expList.Add("localPosition");
+            expList.Add("musicName");
+            expList.Add("bLoop");
+            expList.Add("volume");
         }
         public override StoryBaseCtrl CopySelf()
         {
-            StoryUIDescCtrl obj = new StoryUIDescCtrl();
+            StoryMusicCtrl obj = new StoryMusicCtrl();
             obj.bWait = bWait;
             obj.bClick = bClick;
             obj.time = time;
@@ -56,26 +54,21 @@ namespace xxstory
         }
         public override void Execute()
         {
-            if (mPicture == null)
+            if (_objMusic != null)
             {
-                GameObject objRes = ResManager.LoadResource("UI/" + _realInfo.descName) as GameObject;
-                if (objRes == null)
-                {
-                    Debug.LogWarning("can't find HUIShowPicture in path:" + _realInfo.descName);
-                    return;
-                }
-                GameObject pChild = NGUITools.AddChild(objStoryUI.backGround.gameObject, objRes);
-                pChild.gameObject.name = "StoryDesc";
-                pChild.transform.localPosition = _realInfo.localPosition;
-                mPicture = pChild.gameObject.FindInChildren(_realInfo.childName).GetComponent<HUIShowPicture>();
-                mPicture.InitMember();
+                AudioManager.DestroyAudio(_objMusic);
             }
-            mPicture.showPicture();
+//             _objMusic = AudioManager.PlaySound(_realInfo.musicName, 0, 0, 0, 0);
+//             _objMusic.SetLoop(_realInfo.bLoop);
+            _objMusic = AudioManager.CreateAudio(_realInfo.musicName, _realInfo.bLoop);
+            _objMusic.SetVolume(_realInfo.volume);
         }
         public override void OnFinish()
         {
-            if (mPicture != null)
-                GameObject.DestroyObject(mPicture.transform.parent.gameObject);
+            if (_objMusic !=null)
+            {
+                AudioManager.DestroyAudio(_objMusic);
+            }
         }
         public override void ModInfo()
         {
@@ -98,14 +91,14 @@ namespace xxstory
         {
             switch (key)
             {
-                case "descName":
-                    _normalInfo.descName = lua.L_CheckString(-1);
+                case "musicName":
+                    _normalInfo.musicName = lua.L_CheckString(-1);
                     break;
-                case "childName":
-                    _normalInfo.childName = lua.L_CheckString(-1);
+                case "volume":
+                    _normalInfo.volume = (float)lua.L_CheckNumber(-1);
                     break;
-                case "localPosition":
-                    _normalInfo.localPosition = LuaExport.GetVector3(lua, -1);
+                case "bLoop":
+                    _normalInfo.bLoop = lua.ToBoolean(-1);
                     break;
                 default:
                     return base.WidgetWriteOper(lua, key);
@@ -116,14 +109,14 @@ namespace xxstory
         {
             switch (key)
             {
-                case "descName":
-                    lua.PushString(_realInfo.descName);
+                case "musicName":
+                    lua.PushString(_realInfo.musicName);
                     break;
-                case "childName":
-                    lua.PushString(_realInfo.childName);
+                case "volume":
+                    lua.PushNumber(_realInfo.volume);
                     break;
-                case "localPosition":
-                    LuaExport.Vector3ToStack(lua, _realInfo.localPosition);
+                case "bLoop":
+                    lua.PushBoolean(_realInfo.bLoop);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -134,11 +127,13 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            _normalInfo.descName = EditorGUILayout.TextField("descName", _normalInfo.descName);
-            _normalInfo.childName = EditorGUILayout.TextField("childName", _normalInfo.childName);
-            _normalInfo.localPosition = EditorGUILayout.Vector3Field("localPosition", _normalInfo.localPosition);
+            _normalInfo.musicName = EditorGUILayout.TextField("musicName", _normalInfo.musicName);
+            _normalInfo.volume = EditorGUILayout.FloatField("volume", _normalInfo.volume);
+            _normalInfo.bLoop = GUILayout.Toggle(_normalInfo.bLoop, "bLoop");
             base.OnParamGUI();
         }
 #endif
+        /// /////////////////////////////// 功能函数 ///////////////////////////////////////////////////////////////
+
     }
 }

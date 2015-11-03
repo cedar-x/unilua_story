@@ -15,22 +15,17 @@ namespace xxstory
 {
     public class StoryTweenMoveCtrl : StoryBaseCtrl
     {
-        private class paramInfo
+        private struct paramInfo
         {
-            public float time;
-            public int easetype;
+            public iTween.EaseType easetype;
             public Vector3 localPosition;
-            public Vector3 directPos;
+            public Vector3 directPosition;
             public bool bInitPosition;
         }
-        //事件相关属性
-        public Transform target;
-        public float _time;
-        public Vector3 _localPosition;
-        public bool _bInitPosition;
-
+       
         private paramInfo _saveInfo;
         private paramInfo _realInfo;
+        private paramInfo _normalInfo;
         private Hashtable _paramHash;
 
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
@@ -44,82 +39,100 @@ namespace xxstory
         }
         public override void initInfo()
         {
-            _saveInfo = new paramInfo();
-            _realInfo = new paramInfo();
+            _normalInfo.easetype = iTween.EaseType.linear;
             _paramHash = new Hashtable();
             base.initInfo();
-            expList.Add("szTarget");
             expList.Add("directPos");
             expList.Add("localPosition");
-            expList.Add("time");
+            expList.Add("easetype");
             expList.Add("bInitPosition");
         }
         public override StoryBaseCtrl CopySelf()
         {
             StoryTweenMoveCtrl obj = new StoryTweenMoveCtrl();
+            obj.time = time;
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj._baseCtrl = _baseCtrl;
             //////本类事件属性赋值
-            obj.target= target;
-            obj._time = _time;
-            obj._localPosition = _localPosition;
-            obj._bInitPosition = _bInitPosition;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
         public override void Execute()
         {
+            //Debug.Log("StoryTweenMove:Execute:" + _realInfo.bInitPosition+":" + _realInfo.localPosition.ToString() + ":" + _realInfo.directPosition.ToString());
+            Transform target = _shotCtrl.actor.target.transform;
             if (_realInfo.bInitPosition == true)
             {
                 target.localPosition = _realInfo.localPosition;
             }
             SmoothTarget(target, _realInfo);
         }
- 
-        /// ////////////////功能重写部分-需要保存状态时可以重写/////////////////////////////////////////////
-        //修改事件内容可以重写-点击页签AddEvent-修改时调用
+        public override void OnFinish()
+        {
+            GameObject target = _shotCtrl.actor.target;
+            Debug.Log("StoryTweenMoveCtrl:OnFinish:" + target.name);
+            iTween.Stop(target);
+        }
+        public override void Stop()
+        {
+            GameObject target = _shotCtrl.actor.target;
+            Debug.Log("StoryTweenMoveCtrl:Stop:" + target.name);
+            iTween.Stop(target);
+            target.transform.localPosition = _realInfo.directPosition;
+        }
         public override void ModInfo()
         {
             SavePoint();
             _realInfo = _saveInfo;
         }
-        //保存存储点时可以重写-点击页签AddEvent-存储点时调用
         public override void SavePoint()
         {
-            _saveInfo.localPosition = _localPosition;
-            _saveInfo.directPos = target.localPosition;
-            _saveInfo.time = _time;
-            _saveInfo.bInitPosition = _bInitPosition;
+            _saveInfo = _normalInfo;
         }
-        //重设存储点时可以重写-点击页签AddEvent-重设时调用
-        public override void ResetPoint()
+        public override void ResetPoint(bool bRealInfo)
         {
-            _localPosition = _saveInfo.localPosition;
-            target.localPosition = _saveInfo.directPos;
-            _time = _saveInfo.time;
-            _bInitPosition = _saveInfo.bInitPosition;
+            if (bRealInfo == true)
+                _normalInfo = _realInfo;
+            else
+                _normalInfo = _saveInfo; 
         }
         /// //////////////////属性导出导入部分-有导入导出需求时重写///////////////////////////////////////////////
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "directPos":
+                    _normalInfo.directPosition = LuaExport.GetVector3(lua, -1);
+                    break;
+                case "localPosition":
+                    _normalInfo.localPosition = LuaExport.GetVector3(lua, -1);
+                    break;
+                case "bInitPosition":
+                    _normalInfo.bInitPosition = lua.ToBoolean(-1);
+                    break;
+                case "easetype":
+                    _normalInfo.easetype = (iTween.EaseType)lua.L_CheckInteger(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
+        }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
             switch (key)
             {
-                case "szTarget":
-                    lua.PushString(target.name);
-                    break;
                 case "directPos":
-                    LuaExport.Vector3ToStack(lua, _realInfo.directPos);
+                    LuaExport.Vector3ToStack(lua, _realInfo.directPosition);
                     break;
                 case "localPosition":
-                    if (_realInfo.bInitPosition == false)
-                        return false;
                     LuaExport.Vector3ToStack(lua, _realInfo.localPosition);
-                    break;
-                case "time":
-                    lua.PushNumber(_realInfo.time);
                     break;
                 case "bInitPosition":
                     lua.PushBoolean(_realInfo.bInitPosition);
+                    break;
+                case "easetype":
+                    lua.PushInteger((int)_realInfo.easetype);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -130,23 +143,30 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            target = EditorGUILayout.ObjectField(target, typeof(Transform)) as Transform;
-            if (target != null)
-            {
-
-                target.localPosition = EditorGUILayout.Vector3Field("directPos", target.localPosition);
-                
-            }
             GUILayout.BeginHorizontal();
             if (GUILayout.Button("c", new GUILayoutOption[]{GUILayout.Height(20), GUILayout.Width(20)}))
             {
-                _localPosition = target.transform.localPosition;
+                _normalInfo.localPosition = Selection.activeTransform.position;
             }
-            
-            _localPosition = EditorGUILayout.Vector3Field("localPosition", _localPosition);
+            if (GUILayout.Button("s", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
+            {
+                _shotCtrl.actor.target.transform.localPosition = _normalInfo.localPosition;
+            }
+            _normalInfo.localPosition = EditorGUILayout.Vector3Field("localPosition", _normalInfo.localPosition);
             GUILayout.EndHorizontal();
-            _time = EditorGUILayout.FloatField("time", _time);
-            _bInitPosition = GUILayout.Toggle(_bInitPosition, "bInitPosition");
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("c", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
+            {
+                _normalInfo.directPosition = Selection.activeTransform.position;
+            }
+            if (GUILayout.Button("s", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
+            {
+                _shotCtrl.actor.target.transform.localPosition = _normalInfo.directPosition;
+            }
+            _normalInfo.directPosition = EditorGUILayout.Vector3Field("directPosition", _normalInfo.directPosition);
+            GUILayout.EndHorizontal();
+            _normalInfo.easetype = (iTween.EaseType)EditorGUILayout.EnumPopup("easetype", _normalInfo.easetype);
+            _normalInfo.bInitPosition = GUILayout.Toggle(_normalInfo.bInitPosition, "bInitPosition");
             base.OnParamGUI();
         }
 #endif
@@ -154,12 +174,12 @@ namespace xxstory
         private void SmoothTarget(Transform sTarget, paramInfo pmInfo)
         {
             _paramHash.Clear();
-            _paramHash.Add("time", pmInfo.time);
-            _paramHash.Add("position", pmInfo.directPos);
-            _paramHash.Add("easetype", iTween.EaseType.linear);
-            _paramHash.Add("oncomplete", "OnProxyFinish");
-            _paramHash.Add("oncompleteparams", this);
-            _paramHash.Add("oncompletetarget", _baseCtrl.objProxy.gameObject);
+            _paramHash.Add("time", time);
+            _paramHash.Add("position", pmInfo.directPosition);
+            _paramHash.Add("easetype", pmInfo.easetype);
+//             _paramHash.Add("oncomplete", "OnProxyFinish");
+//             _paramHash.Add("oncompleteparams", this);
+//             _paramHash.Add("oncompletetarget", _baseCtrl.objProxy.gameObject);
             
             iTween.MoveTo(sTarget.gameObject, _paramHash);
         }

@@ -15,7 +15,7 @@ namespace xxstory
 {
     public class StoryCombineCtrl : StoryBaseCtrl
     {
-        public Transform target;
+        public bool bRecalculate; 
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
         public override string luaName
         {
@@ -28,31 +28,41 @@ namespace xxstory
         public override void initInfo()
         {
             base.initInfo();
-            expList.Add("szTarget");
+            expList.Add("bRecalculate");
         }
         public override StoryBaseCtrl CopySelf()
         {
             StoryCombineCtrl obj = new StoryCombineCtrl();
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj._baseCtrl = _baseCtrl;
-            obj.target = target;
+            obj.time = time;
+            obj.bRecalculate = bRecalculate;
             return obj;
         }
         public override void Execute()
         {
-            if (target != null)
-                objMainCamera.ResetParam(target.transform);
+            if (bRecalculate == false)
+                objMainCamera.ResetParam(_shotCtrl.actor.target.transform);
             objMainCamera.CombineParent();
+        }
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "bRecalculate":
+                    bRecalculate = lua.ToBoolean(-1);;
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
         }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
             switch (key)
             {
-                case "szTarget":
-                    if (target == null)
-                        return false;
-                    lua.PushString(target.name);
+                case "bRecalculate":
+                    lua.PushBoolean(bRecalculate);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -63,7 +73,8 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            target = EditorGUILayout.ObjectField(target, typeof(Transform)) as Transform;
+            bRecalculate = GUILayout.Toggle(bRecalculate, "bRecalculate");
+            base.OnParamGUI();
         }
 #endif
         /// /////////////////////////////// 功能函数 ///////////////////////////////////////////////////////////////

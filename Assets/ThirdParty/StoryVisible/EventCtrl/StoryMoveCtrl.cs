@@ -15,34 +15,23 @@ namespace xxstory
 {
     public class StoryMoveCtrl : StoryBaseCtrl
     {
-        private class paramInfo
+        private struct paramInfo
         {
-            public Actor target;
             public Vector3 localPosition;
-            public Vector3 directPos;
+            public Vector3 directPosition;
             public float speed;
             public int dwMMethod;
             public bool bInitPosition;
         }
-
         private paramInfo _realInfo;
         private paramInfo _saveInfo;
-
-        public Actor target;
-        public Vector3 _localPosition;
-        public float _speed;
-        public int _dwMMethod;
-        public bool _bInitPosition;
+        private paramInfo _normalInfo;
 
         public override void initInfo()
         {
-            _speed = 1;
-            _bInitPosition = false;
-            _realInfo = new paramInfo();
-            _saveInfo = new paramInfo();
-
+            _normalInfo.speed = 1;
+            _normalInfo.dwMMethod = 1;
             base.initInfo();
-            expList.Add("szTarget");
             expList.Add("speed");
             expList.Add("localPosition");
             expList.Add("directPos");
@@ -66,15 +55,10 @@ namespace xxstory
         public override StoryBaseCtrl CopySelf()
         {
             StoryMoveCtrl obj = new StoryMoveCtrl();
-            EventDelegate.Add(target.onMoveStop, obj.OnFinish);
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj._baseCtrl = _baseCtrl;
-            obj.target = target;
-            obj._localPosition = _localPosition;
-            obj._speed = _speed;
-            obj._bInitPosition = _bInitPosition;
-            obj._dwMMethod = _dwMMethod;
+            obj.time = time;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
         /// ///////////////////////////////////////////////////////////
@@ -85,40 +69,66 @@ namespace xxstory
         }
         public override void SavePoint()
         {
-            _saveInfo.localPosition = _localPosition;
-            _saveInfo.directPos = target.transform.localPosition;
-            _saveInfo.speed = _speed;
-            _saveInfo.bInitPosition = _bInitPosition;
-            _saveInfo.dwMMethod = _dwMMethod;
+            _saveInfo = _normalInfo;
         }
-        public override void ResetPoint()
+        public override void ResetPoint(bool bRealInfo)
         {
-            target.transform.localPosition = _saveInfo.directPos;
-            _speed = _saveInfo.speed;
-            _localPosition = _saveInfo.localPosition;
-            _bInitPosition = _saveInfo.bInitPosition;
-            _dwMMethod = _saveInfo.dwMMethod;
+            if (bRealInfo)
+                _normalInfo = _realInfo;
+            else
+                _normalInfo = _saveInfo;
         }
         public override void OnFinish()
         {
-            base.OnFinish();
+            Actor target = _shotCtrl.actor.target.GetComponent<Actor>();
+            target.onMoveStop -= this.OnFinish;
+        }
+        public override void Stop()
+        {
+            Actor target = _shotCtrl.actor.target.GetComponent<Actor>();
+            target.onMoveStop -= this.OnFinish;
+            target.MoveStop();
+            target.transform.localPosition = _realInfo.directPosition;
         }
         public override void Execute()
         {
+            Actor target = _shotCtrl.actor.target.GetComponent<Actor>();
             if (_realInfo.bInitPosition == true)
                 target.transform.localPosition = _realInfo.localPosition;
-            //target.MoveMethod = _realInfo.dwMMethod;
+            target.onMoveStop += this.OnFinish;
+            target.MoveMethod = _realInfo.dwMMethod;
+            target.SetMoveTime(time);
             target.SetSpeed(_realInfo.speed);
-            target.MoveTo(_realInfo.directPos.x, _realInfo.directPos.y, _realInfo.directPos.z, false, 0, 0, 0);
-            
+            target.MoveTo(_realInfo.directPosition.x, _realInfo.directPosition.y, _realInfo.directPosition.z, false, 0, 0, 0);
+        }
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "speed":
+                    _normalInfo.speed = (float)lua.L_CheckNumber(-1);
+                    break;
+                case "dwMMethod":
+                    _normalInfo.dwMMethod = lua.L_CheckInteger(-1);
+                    break;
+                case "localPosition":
+                    _normalInfo.localPosition = LuaExport.GetVector3(lua, -1);
+                    break;
+                case "directPos":
+                    _normalInfo.directPosition = LuaExport.GetVector3(lua, -1);
+                    break;
+                case "bInitPosition":
+                    _normalInfo.bInitPosition = lua.ToBoolean(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
         }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
             switch (key)
             {
-                case "szTarget":
-                    lua.PushString(target.name);
-                    break;
                 case "speed":
                     lua.PushNumber(_realInfo.speed);
                     break;
@@ -132,7 +142,7 @@ namespace xxstory
                     LuaExport.Vector3ToStack(lua, _realInfo.localPosition);
                     break;
                 case "directPos":
-                    LuaExport.Vector3ToStack(lua, _realInfo.directPos);
+                    LuaExport.Vector3ToStack(lua, _realInfo.directPosition);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -142,25 +152,31 @@ namespace xxstory
 #if UNITY_EDITOR 
         public override void OnParamGUI()
         {
-            target = EditorGUILayout.ObjectField(target, typeof(Actor)) as Actor;
-            if (target != null)
-            {
-                target.transform.localPosition = EditorGUILayout.Vector3Field("directPos", target.transform.localPosition);
-            }
             EditorGUILayout.BeginHorizontal();
             if (GUILayout.Button("c", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
             {
-                _localPosition = target.transform.localPosition;
+                _normalInfo.localPosition = Selection.activeTransform.position;
             }
             if (GUILayout.Button("s", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
             {
-                target.transform.localPosition = _localPosition;
+                _shotCtrl.actor.target.transform.localPosition = _normalInfo.localPosition;
             }
-            _localPosition = EditorGUILayout.Vector3Field("localPosition", _localPosition);
+            _normalInfo.localPosition = EditorGUILayout.Vector3Field("localPosition", _normalInfo.localPosition);
             EditorGUILayout.EndHorizontal();
-            _speed = EditorGUILayout.FloatField("speed", _speed);
-            _dwMMethod = EditorGUILayout.IntField("dwMMethod", _dwMMethod);
-            _bInitPosition = GUILayout.Toggle(_bInitPosition, "bInitPosition");
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button("c", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
+            {
+                _normalInfo.directPosition = Selection.activeTransform.position;
+            }
+            if (GUILayout.Button("s", new GUILayoutOption[] { GUILayout.Height(20), GUILayout.Width(20) }))
+            {
+                _shotCtrl.actor.target.transform.localPosition = _normalInfo.directPosition;
+            }
+            _normalInfo.directPosition = EditorGUILayout.Vector3Field("directPosition", _normalInfo.directPosition);
+            EditorGUILayout.EndHorizontal();
+            _normalInfo.speed = EditorGUILayout.FloatField("speed", _normalInfo.speed);
+            _normalInfo.dwMMethod = EditorGUILayout.IntField("dwMMethod", _normalInfo.dwMMethod);
+            _normalInfo.bInitPosition = GUILayout.Toggle(_normalInfo.bInitPosition, "bInitPosition");
             base.OnParamGUI();
         }
 #endif

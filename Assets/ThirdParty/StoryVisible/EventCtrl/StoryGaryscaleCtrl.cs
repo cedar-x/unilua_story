@@ -15,89 +15,109 @@ namespace xxstory {
 
     public class StoryGrayscaleCtrl : StoryBaseCtrl {
 
-        public float durTime;
-        public float dwStart = 0f;
- 
         /// ////////////////////////////////////////////////////////
-      
+        private struct paramInfo
+        {
+            public bool bTransition;
+        }
+        private paramInfo _saveInfo;
+        private paramInfo _realInfo;
+        private paramInfo _normalInfo;
+        private float yuanSaturation;
         public override string luaName
         {
             get { return "StoryGrayscaleCtrl"; }
         }
-
         public override string ctrlName
         {  
             get { return "画面去色"; }
         }
-
         public override void initInfo()
         {
-            bWait = true;
             base.initInfo();
-            expList.Add("durTime");
+            expList.Add("bTransition");
         }
-
         public override StoryBaseCtrl CopySelf()
         {
             StoryGrayscaleCtrl obj = new StoryGrayscaleCtrl();
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj._baseCtrl = _baseCtrl;
-            obj.durTime = durTime;
+            obj.time = time;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
-
         public override void Execute()
         {
-            GrayscaleEffect obj = objMainCamera.gameObject.GetComponent<GrayscaleEffect>();   
-            if (obj == null)
-            {
-               objMainCamera.gameObject.AddComponent<GrayscaleEffect>();
-               obj = objMainCamera.gameObject.GetComponent<GrayscaleEffect>();   
-            }
-            dwStart = Time.time;
-            obj.shader = Shader.Find("Hidden/Grayscale Effect");
-            obj.enabled = true;
+            ColorCorrectionCurves colorCurves = objMainCamera.gameObject.GetComponent<ColorCorrectionCurves>();
+            yuanSaturation = colorCurves.saturation;
+            Debug.Log("GrayscaleCtrl:" + yuanSaturation + ":" + _realInfo.bTransition);
+            if (_realInfo.bTransition == false)
+                colorCurves.saturation = 0;
         }
-
+        public override void OnFinish()
+        {
+            Debug.Log("StoryGaryScaleCtrl:OnFinish:" + yuanSaturation);
+            objMainCamera.gameObject.GetComponent<ColorCorrectionCurves>().saturation = yuanSaturation;
+        }
+        public override void Update()
+        {
+            if (Time.time - startTime > time)
+            {
+                onEnd();
+                OnFinish();
+                yuanSaturation = 0;
+            }
+            else if (_realInfo.bTransition == true && yuanSaturation !=0)
+            {
+                objMainCamera.GetComponent<ColorCorrectionCurves>().saturation = Mathf.Lerp(yuanSaturation, 0, (Time.time - startTime) / time);
+            }
+        }
+        public override void ModInfo()
+        {
+            SavePoint();
+            _realInfo = _saveInfo;
+        }
+        public override void SavePoint()
+        {
+            _saveInfo = _normalInfo;
+        }
+        public override void ResetPoint(bool bRealInfo)
+        {
+            if (bRealInfo)
+                _normalInfo = _realInfo;
+            else
+                _normalInfo = _saveInfo;
+        }
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "bTransition":
+                    _normalInfo.bTransition = lua.ToBoolean(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
+        }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
-            switch (key){
-                case "durTime":
-                    lua.PushNumber(durTime);
+            switch (key)
+            {
+                case "bTransition":
+                    lua.PushBoolean(_realInfo.bTransition);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
             }
             return true;
         }
-        ////////////////////////////////////////////////////////////////////
 #if UNITY_EDITOR
-
-        //Inspector param
         public override void OnParamGUI(){
-            
-            durTime = EditorGUILayout.FloatField("durTime", durTime);
+            _normalInfo.bTransition = GUILayout.Toggle(_normalInfo.bTransition, "bTranstion");
             base.OnParamGUI();
         }
 #endif
-        public override void Update()
-        {
-            if (dwStart == 0) 
-                return;
-            if (Time.time - dwStart > durTime) {
-                dwStart = 0f;
-                OnFinish();
-            }     
-        }
-
-        public override void OnFinish()
-        {
-            objMainCamera.gameObject.GetComponent<GrayscaleEffect>().enabled = false;
-            base.OnFinish();
-
-        }
-
-        
+    
     }
 }

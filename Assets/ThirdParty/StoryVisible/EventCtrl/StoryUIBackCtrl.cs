@@ -1,6 +1,5 @@
 ﻿using UnityEngine;
 using System.Collections;
-using System.Collections.Generic;
 #if UNITY_EDITOR 
 using UnityEditor;
 #endif
@@ -8,74 +7,62 @@ using UniLua;
 using Hstj;
 
 /// <summary>
-/// 设计目的：用于--UI文字描述--事件的调度
-/// 设计时间：2015-10-10
+/// 设计目的：用于--UI背景类--事件的调度
+/// 设计时间：2015-08-28
 /// </summary>
 
 namespace xxstory
 {
-    public class StoryUIDescCtrl : StoryBaseCtrl
+    public class StoryUIBackCtrl : StoryBaseCtrl
     {
         private struct paramInfo
         {
-            public string descName;
-            public string childName;
+            public int type;
             public Vector3 localPosition;
         }
-        private paramInfo _saveInfo;
         private paramInfo _realInfo;
+        private paramInfo _saveInfo;
         private paramInfo _normalInfo;
-        private HUIShowPicture mPicture;
-        public List<Texture2D> _textures = new List<Texture2D>();
 
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
         public override string luaName
         {
-            get { return "StoryUIDescCtrl"; }
+            get { return "StoryUIBackCtrl"; }
         }
         public override string ctrlName
         {
-            get { return "描述"; }
+            get { return "UI背景"; }
         }
         public override void initInfo()
         {
-            _normalInfo.childName = "grid";
             base.initInfo();
-            expList.Add("descName");
-            expList.Add("childName");
+            expList.Add("type");
             expList.Add("localPosition");
         }
         public override StoryBaseCtrl CopySelf()
         {
-            StoryUIDescCtrl obj = new StoryUIDescCtrl();
+            StoryUIBackCtrl obj = new StoryUIBackCtrl();
+            obj.time = time;
             obj.bWait = bWait;
             obj.bClick = bClick;
-            obj.time = time;
+            //////本类事件属性赋值
             obj._normalInfo = _normalInfo;
             return obj;
         }
         public override void Execute()
         {
-            if (mPicture == null)
+            Debug.Log("StoryUIBackCtrl:Execute:" + _realInfo.type + ":" + _realInfo.localPosition.ToString() + ":" + objStoryUI.shangBack.name);
+            if (_realInfo.type == 0)
             {
-                GameObject objRes = ResManager.LoadResource("UI/" + _realInfo.descName) as GameObject;
-                if (objRes == null)
-                {
-                    Debug.LogWarning("can't find HUIShowPicture in path:" + _realInfo.descName);
-                    return;
-                }
-                GameObject pChild = NGUITools.AddChild(objStoryUI.backGround.gameObject, objRes);
-                pChild.gameObject.name = "StoryDesc";
-                pChild.transform.localPosition = _realInfo.localPosition;
-                mPicture = pChild.gameObject.FindInChildren(_realInfo.childName).GetComponent<HUIShowPicture>();
-                mPicture.InitMember();
+                objStoryUI.btnClose.SetActive(false);
+            }else if (_realInfo.type == 1)
+            {
+                objStoryUI.shangBack.SetActive(false);
             }
-            mPicture.showPicture();
-        }
-        public override void OnFinish()
-        {
-            if (mPicture != null)
-                GameObject.DestroyObject(mPicture.transform.parent.gameObject);
+            else if (_realInfo.type == 2)
+            {
+                objStoryUI.xiaBack.SetActive(false);
+            }
         }
         public override void ModInfo()
         {
@@ -88,21 +75,18 @@ namespace xxstory
         }
         public override void ResetPoint(bool bRealInfo)
         {
-            if (bRealInfo)
+            if (bRealInfo == true)
                 _normalInfo = _realInfo;
             else
-                _normalInfo = _saveInfo;
+                _normalInfo = _saveInfo; 
         }
         /// //////////////////属性导出导入部分-有导入导出需求时重写///////////////////////////////////////////////
         protected override bool WidgetWriteOper(ILuaState lua, string key)
         {
             switch (key)
             {
-                case "descName":
-                    _normalInfo.descName = lua.L_CheckString(-1);
-                    break;
-                case "childName":
-                    _normalInfo.childName = lua.L_CheckString(-1);
+                case "type":
+                    _normalInfo.type = lua.L_CheckInteger(-1);
                     break;
                 case "localPosition":
                     _normalInfo.localPosition = LuaExport.GetVector3(lua, -1);
@@ -116,11 +100,8 @@ namespace xxstory
         {
             switch (key)
             {
-                case "descName":
-                    lua.PushString(_realInfo.descName);
-                    break;
-                case "childName":
-                    lua.PushString(_realInfo.childName);
+                case "type":
+                    lua.PushInteger(_realInfo.type);
                     break;
                 case "localPosition":
                     LuaExport.Vector3ToStack(lua, _realInfo.localPosition);
@@ -134,11 +115,12 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            _normalInfo.descName = EditorGUILayout.TextField("descName", _normalInfo.descName);
-            _normalInfo.childName = EditorGUILayout.TextField("childName", _normalInfo.childName);
-            _normalInfo.localPosition = EditorGUILayout.Vector3Field("localPosition", _normalInfo.localPosition);
+            _normalInfo.type = EditorGUILayout.IntField("type", _normalInfo.type);
+            //_normalInfo.localPosition = EditorGUILayout.Vector3Field("localPosition", _normalInfo.localPosition);
             base.OnParamGUI();
         }
 #endif
+        /// /////////////////////////////// 功能函数 ///////////////////////////////////////////////////////////////
+
     }
 }

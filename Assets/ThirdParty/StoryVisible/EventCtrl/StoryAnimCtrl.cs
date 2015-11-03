@@ -15,22 +15,16 @@ namespace xxstory
 {
     public class StoryAnimCtrl : StoryBaseCtrl
     {
-
-        private class paramInfo
+        private struct paramInfo
         {
             public string AnimName;
             public float speed;
             public int nState;
+            public int dwMMethod;
         }
-
         private paramInfo _realInfo;
         private paramInfo _saveInfo;
-
-        //事件相关属性
-        public string _AnimName;
-        public float _speed;
-        public int _nState;
-        public Actor target;
+        private paramInfo _normalInfo;
 
         /// ////////////////功能重写部分-必须实现部分/////////////////////////////////////////////
         public override string luaName
@@ -42,82 +36,83 @@ namespace xxstory
             get { return "动作"; }
         }
         public override void initInfo()
-        {   
-            _speed = 1.0f;
-            _saveInfo = new paramInfo();
-            _realInfo = new paramInfo();
+        {
+            _normalInfo.speed = 1.0f;
+            _normalInfo.nState = 1;
             base.initInfo();
             expList.Add("AnimName");
-            expList.Add("szTarget");
             expList.Add("speed");
             expList.Add("nState");
-
+            expList.Add("dwMMethod");
         }
         public override StoryBaseCtrl CopySelf()
         {
             StoryAnimCtrl obj = new StoryAnimCtrl();
+            obj.time = time;
             obj.bWait = bWait;
-            obj._baseCtrl = _baseCtrl;
+            obj.bClick = bClick;
             //////本类事件属性赋值
-            obj.target = target; 
-            obj._AnimName = _AnimName;
-            obj._speed = _speed;
-            obj._nState = _nState;
+            obj._normalInfo = _normalInfo;
             return obj;
         }
         public override void Execute()
         {
+            Actor target = _shotCtrl.actor.target.GetComponent<Actor>();
             if (target == null)
             {
                 Debug.LogWarning("StoryAnimCtrl Execute not have target");
                 return;
             }
             Animator anim = target.GetAnimator();
-            if (anim && _realInfo.nState != 0)
+            if (anim)
             {
                 anim.SetInteger("nState", _realInfo.nState);
             }
-            target.PlayAnim(_realInfo.AnimName, _realInfo.speed);
+            target.MoveMethod = _realInfo.dwMMethod;
+            target.PlayAnim(_realInfo.AnimName, _realInfo.speed, 0, 0);
         }
- 
-        /// ////////////////功能重写部分-需要保存状态时可以重写/////////////////////////////////////////////
-
-        /// 每帧执行一次调用-与MonoBehaviour调用频率相同
-//         public override void Update()
-//         {
-//         }
-//         //事件等待结束，结束有特殊需求可以重写-用于bWait=true的事件的结束调用
-//         public override void OnFinish()
-//         {
-//         }
-        //修改事件内容可以重写-点击页签AddEvent-修改时调用
         public override void ModInfo()
         {
             SavePoint();
             _realInfo = _saveInfo;
         }
-        //保存存储点时可以重写-点击页签AddEvent-存储点时调用
         public override void SavePoint()
         {
-            _saveInfo.AnimName = _AnimName;
-            _saveInfo.speed = _speed;
-            _saveInfo.nState = _nState;
+            _saveInfo = _normalInfo;
         }
-        //重设存储点时可以重写-点击页签AddEvent-重设时调用
-        public override void ResetPoint()
+        public override void ResetPoint(bool bRealInfo)
         {
-            _AnimName = _saveInfo.AnimName;
-            _speed = _saveInfo.speed;
-            _nState = _saveInfo.nState;
+            if (bRealInfo == true)
+                _normalInfo = _realInfo;
+            else
+                _normalInfo = _saveInfo; 
         }
         /// //////////////////属性导出导入部分-有导入导出需求时重写///////////////////////////////////////////////
+        protected override bool WidgetWriteOper(ILuaState lua, string key)
+        {
+            switch (key)
+            {
+                case "AnimName":
+                    _normalInfo.AnimName = lua.L_CheckString(-1);
+                    break;
+                case "speed":
+                    _normalInfo.speed = (float)lua.L_CheckNumber(-1);
+                    break;
+                case "nState":
+                    _normalInfo.nState = lua.L_CheckInteger(-1);
+                    break;
+                case "dwMMethod":
+                    _normalInfo.dwMMethod = lua.L_CheckInteger(-1);
+                    break;
+                default:
+                    return base.WidgetWriteOper(lua, key);
+            }
+            return true;
+        }
         protected override bool WidgetReadOper(ILuaState lua, string key)
         {
             switch (key)
             {
-                case "szTarget":
-                    lua.PushString(target.name);
-                    break;
                 case "AnimName":
                     lua.PushString(_realInfo.AnimName);
                     break;
@@ -126,6 +121,9 @@ namespace xxstory
                     break;
                 case "nState":
                     lua.PushInteger(_realInfo.nState);
+                    break;
+                case "dwMMethod":
+                    lua.PushInteger(_realInfo.dwMMethod);
                     break;
                 default:
                     return base.WidgetReadOper(lua, key);
@@ -136,10 +134,15 @@ namespace xxstory
         /// ////////////////UI显示部分-AddEvent页签中创建相应事件UI显示/////////////////////////////////////////////
         public override void OnParamGUI()
         {
-            target = EditorGUILayout.ObjectField(target, typeof(Actor)) as Actor;
-            _AnimName = EditorGUILayout.TextField("AnimName", _AnimName);
-            _nState = EditorGUILayout.IntField("nState", _nState);
-            _speed = EditorGUILayout.FloatField("Speed", _speed);
+            _normalInfo.AnimName = EditorGUILayout.TextField("AnimName", _normalInfo.AnimName);
+            _normalInfo.nState = EditorGUILayout.IntField("nState", _normalInfo.nState);
+            if (_normalInfo.nState != 1 && _normalInfo.nState != 50)
+            {
+                _normalInfo.nState = 1;
+            }
+            _normalInfo.dwMMethod = EditorGUILayout.IntField("dwMMethod", _normalInfo.dwMMethod);
+            _normalInfo.speed = EditorGUILayout.FloatField("Speed", _normalInfo.speed);
+            base.OnParamGUI();
         }
 #endif
         /// /////////////////////////////// 功能函数 ///////////////////////////////////////////////////////////////
